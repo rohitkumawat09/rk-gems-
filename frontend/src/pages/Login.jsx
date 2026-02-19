@@ -1,54 +1,62 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import API from "../../axios";
+import { useAuth } from "../context/AuthContext";
 
 const LoginForm = () => {
   const [form, setForm] = useState({ email: "", password: "" });
-  const [message, setMessage] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [resendDisabled, setResendDisabled] = useState(false);
+  const [resendTimer, setResendTimer] = useState(0);
+  
+  const { login, verifyOtp, isLoading, error } = useAuth();
   const navigate = useNavigate();
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await API.post("/login", form);
-      setMessage(res.data.message || "OTP sent");
-      if (res.data?.success) setOtpSent(true);
+      await login(form.email, form.password);
+      setOtpSent(true);
     } catch (err) {
-      setMessage(err.response?.data?.message || "Error");
+      // Error is handled by AuthContext
     }
   };
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     try {
-      const res = await API.post("/verify-otp", { email: form.email, otp });
-      if (res.data?.accessToken) {
-        localStorage.setItem("accessToken", res.data.accessToken);
-        localStorage.setItem("user", JSON.stringify(res.data.user || {}));
-        setMessage("Verified — logged in");
-        navigate("/");
-      } else {
-        setMessage(res.data.message || "Verification failed");
-      }
+      await verifyOtp(form.email, otp);
+      navigate("/");
     } catch (err) {
-      setMessage(err.response?.data?.message || "OTP verification error");
+      // Error is handled by AuthContext
     }
   };
 
   const handleResendOtp = async () => {
-    if (!form.email) return setMessage("Enter email first");
+    if (!form.email) return;
     try {
-      await API.post("/request-otp", { email: form.email });
-      setMessage("OTP resent to email");
       setResendDisabled(true);
-      setTimeout(() => setResendDisabled(false), 10000); // enable after 10s
+      setResendTimer(30);
+      await login(form.email, form.password);
+      
+      // Start countdown timer
+      const interval = setInterval(() => {
+        setResendTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(interval);
+            setResendDisabled(false);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     } catch (err) {
-      setMessage(err.response?.data?.message || "Error resending OTP");
+      setResendDisabled(false);
+      setResendTimer(0);
     }
   };
 
@@ -65,6 +73,8 @@ const LoginForm = () => {
             className="auth-input"
             value={form.email}
             onChange={handleChange}
+            disabled={isLoading}
+            required
           />
           <input
             type="password"
@@ -73,8 +83,17 @@ const LoginForm = () => {
             className="auth-input"
             value={form.password}
             onChange={handleChange}
+            disabled={isLoading}
+            required
           />
-          <button type="submit" className="auth-button">Login</button>
+          <button 
+            type="submit" 
+            className="auth-button"
+            disabled={isLoading}
+          >
+            {isLoading ? "Logging in..." : "Login"}
+          </button>
+          {error && <p className="auth-error">{error}</p>}
         </form>
       )}
 
@@ -84,26 +103,34 @@ const LoginForm = () => {
           <input
             type="text"
             name="otp"
-            placeholder="Enter OTP"
+            placeholder="Enter 6-digit OTP"
             className="auth-input"
             value={otp}
             onChange={(e) => setOtp(e.target.value)}
+            disabled={isLoading}
+            required
+            maxLength="6"
           />
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <button type="submit" className="auth-button">Verify OTP</button>
+            <button 
+              type="submit" 
+              className="auth-button"
+              disabled={isLoading}
+            >
+              {isLoading ? "Verifying..." : "Verify OTP"}
+            </button>
             <button
               type="button"
               className="auth-button"
               onClick={handleResendOtp}
-              disabled={resendDisabled}
+              disabled={resendDisabled || isLoading}
             >
-              {resendDisabled ? "Resend (wait)" : "Resend OTP"}
+              {resendDisabled ? `Resend (${resendTimer}s)` : "Resend OTP"}
             </button>
           </div>
+          {error && <p className="auth-error">{error}</p>}
         </form>
       )}
-
-      {message && <p className="auth-message">{message}</p>}
     </div>
   );
 };

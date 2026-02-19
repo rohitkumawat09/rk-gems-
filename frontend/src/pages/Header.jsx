@@ -1,31 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import API from "../../axios";
+import { useAuth } from "../context/AuthContext";
 
 export const Header = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user, isLoggedIn, isLoading, logout } = useAuth();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    try {
-      setIsLoggedIn(!!localStorage.getItem("accessToken"));
-    } catch (e) {
-      setIsLoggedIn(false);
-    }
-  }, []);
 
   const handleLogout = async () => {
     try {
-      await API.post("/logout");
+      await logout();
+      navigate("/login");
     } catch (err) {
-      // ignore errors, proceed to clear local state
+      // Error handled in context, still redirect
+      navigate("/login");
     }
-    try {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("user");
-    } catch (e) {}
-    setIsLoggedIn(false);
-    navigate("/login");
   };
 
   return (
@@ -41,9 +29,20 @@ export const Header = () => {
           )}
           <li><Link to="/forgot-password" className="nav-link">Forgot Password</Link></li>
           {isLoggedIn && (
-            <li>
-              <button className="nav-link auth-logout" onClick={handleLogout}>Logout</button>
-            </li>
+            <>
+              <li className="nav-user">
+                Welcome, {user?.email || "User"}
+              </li>
+              <li>
+                <button 
+                  className="nav-link auth-logout"
+                  onClick={handleLogout}
+                  disabled={isLoading}
+                >
+                  {isLoading ? "Logging out..." : "Logout"}
+                </button>
+              </li>
+            </>
           )}
         </ul>
       </nav>

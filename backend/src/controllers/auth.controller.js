@@ -5,7 +5,8 @@ import { validateLogin, validateRegister, validateForgotPassword, validateResetP
 import {
   generateAccessToken,
   generateRefreshToken,
-  verifyRefreshToken
+  verifyRefreshToken,
+  verifyAccessToken
 } from "../utils/jwt.js";
 import { hashRefreshToken, compareRefreshToken } from "../utils/hash.js";
 import { MAX_LOGIN_ATTEMPTS } from "../utils/constants.js";
@@ -141,21 +142,62 @@ export const verifyOtp = async (req, res, next) => {
   }
 };
 
+// Me: return current user based on access token in HttpOnly cookie
+export const me = async (req, res, next) => {
+  try {
+    const accessToken = req.cookies?.accessToken;
+    console.log(`🔍 ME: accessToken present? ${!!accessToken}`);
+    if (!accessToken) {
+      console.log("🔒 ME: No access token in cookies -> 401");
+      return res.status(401).json({ message: "No access token" });
+    }
+
+    let payload;
+    try {
+      console.log("🔐 ME: Verifying access token...");
+      payload = verifyAccessToken(accessToken);
+      console.log(`🔐 ME: Access token valid for user ${payload.id}`);
+    } catch (err) {
+      console.log("❌ ME: Access token verification failed:", err.message);
+      return res.status(401).json({ message: "Invalid access token" });
+    }
+
+    const user = await User.findById(payload.id).select("_id email role");
+    if (!user) {
+      console.log(`❌ ME: User not found for id ${payload.id}`);
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    console.log(`✅ ME: Returning user ${user.email} (${user._id})`);
+    res.json({ success: true, user: { id: user._id, email: user.email, role: user.role } });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Refresh: implement rotation and reuse detection with hashed tokens
 export const refresh = async (req, res, next) => {
   try {
     // Get refresh token from HttpOnly cookie
     const refreshToken = req.cookies.refreshToken;
-    if (!refreshToken) return res.status(401).json({ message: "No refresh token" });
+    console.log(`🔁 REFRESH: refreshToken present? ${!!refreshToken}`);
+    if (!refreshToken) {
+      console.log("🔒 REFRESH: No refresh token in cookies -> 401");
+      return res.status(401).json({ message: "No refresh token" });
+    }
 
     let payload;
     try {
+      console.log("🔐 REFRESH: Verifying refresh token...");
       payload = verifyRefreshToken(refreshToken);
+      console.log(`🔐 REFRESH: Refresh token valid for user ${payload.id}`);
     } catch (err) {
       // token invalid or expired - try decode to detect potential reuse
+      console.log("❌ REFRESH: Refresh token verification failed:", err.message);
       const decoded = jwt.decode(refreshToken);
+      console.log("🔎 REFRESH: Decoded payload (for reuse detection):", decoded);
       if (decoded?.id) {
-        // possible reuse - revoke all refresh tokens for this user
+        console.log(`⚠️ REFRESH: Possible reuse detected for user ${decoded.id} - revoking all tokens`);
         await RefreshToken.updateMany(
           { user: decoded.id },
           { isRevoked: true }
@@ -170,6 +212,8 @@ export const refresh = async (req, res, next) => {
       isRevoked: false,
       expiresAt: { $gt: new Date() }
     });
+
+    console.log(`🔎 REFRESH: found ${tokenDocs.length} non-revoked refresh token docs for user ${payload.id}`);
 
     let tokenDoc = null;
     for (const doc of tokenDocs) {
@@ -187,10 +231,12 @@ export const refresh = async (req, res, next) => {
         { user: payload.id },
         { isRevoked: true }
       );
+      console.log(`🔒 REFRESH: All tokens revoked for user ${payload.id} due to reuse detection`);
       return res.status(401).json({ message: "Refresh token reuse detected" });
     }
 
     // Valid token found - rotate: revoke old token, issue new tokens
+    console.log(`🔁 REFRESH: Valid token document found ${tokenDoc._id} - revoking and rotating`);
     await RefreshToken.updateOne({ _id: tokenDoc._id }, { isRevoked: true });
 
     const user = await User.findById(payload.id);
@@ -217,6 +263,7 @@ export const refresh = async (req, res, next) => {
     });
 
     console.log(`✅ TOKEN ROTATION: New tokens issued for user ${user._id}`);
+    console.log(`🔁 REFRESH: Rotation complete for user ${user._id}`);
     res.json({ 
       success: true,
       accessToken: newAccessToken,
@@ -236,6 +283,9 @@ export const logout = async (req, res, next) => {
     // Get refresh token from HttpOnly cookie
     const refreshToken = req.cookies.refreshToken;
     
+    console.log(`🔐 LOGOUT: refreshToken present? ${!!refreshToken}`);
+    console.log("🔐 LOGOUT: Clearing accessToken and refreshToken cookies (if present)");
+
     // Always clear both cookies regardless of token validity
     res.clearCookie("refreshToken", {
       httpOnly: true,
@@ -264,17 +314,18 @@ export const logout = async (req, res, next) => {
     let userId;
     try {
       const decoded = jwt.decode(refreshToken);
+      console.log("🔎 LOGOUT: Decoded refresh token payload:", decoded);
       userId = decoded?.id;
       
       if (!userId) {
-        console.log("⚠️ LOGOUT: Invalid token format");
+        console.log("⚠️ LOGOUT: Invalid token format - no user id");
         return res.json({ 
           success: true,
           message: "Logged out successfully" 
         });
       }
     } catch (err) {
-      console.log("⚠️ LOGOUT: Token decode failed");
+      console.log("⚠️ LOGOUT: Token decode failed", err.message);
       return res.json({ 
         success: true,
         message: "Logged out successfully" 

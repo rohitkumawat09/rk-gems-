@@ -1,21 +1,59 @@
 import React, { useState } from "react";
-import API from "../../axios";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const RegisterForm = () => {
   const [form, setForm] = useState({ name: "", email: "", password: "" });
-  const [message, setMessage] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [validationError, setValidationError] = useState("");
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const { register, isLoading, error } = useAuth();
+  const navigate = useNavigate();
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    setValidationError("");
+  };
+
+  const handleConfirmPasswordChange = (e) => {
+    setConfirmPassword(e.target.value);
+    setValidationError("");
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Client-side validation
+    if (!form.name.trim()) {
+      setValidationError("Name is required");
+      return;
+    }
+
+    if (!form.email.trim()) {
+      setValidationError("Email is required");
+      return;
+    }
+
+    if (form.password.length < 8) {
+      setValidationError("Password must be at least 8 characters");
+      return;
+    }
+
+    if (form.password !== confirmPassword) {
+      setValidationError("Passwords do not match");
+      return;
+    }
+
     try {
-      const res = await API.post("/register", form);
-      setMessage(res.data.message);
+      await register(form.name, form.email, form.password);
+      // Redirect to login after successful registration
+      navigate("/login");
     } catch (err) {
-      setMessage(err.response?.data?.message || "Error");
+      // Error is handled by AuthContext
     }
   };
+
+  const displayError = validationError || error;
 
   return (
     <div className="auth-container">
@@ -24,10 +62,12 @@ const RegisterForm = () => {
         <input
           type="text"
           name="name"
-          placeholder="Name"
+          placeholder="Full Name"
           className="auth-input"
           value={form.name}
           onChange={handleChange}
+          disabled={isLoading}
+          required
         />
         <input
           type="email"
@@ -36,18 +76,43 @@ const RegisterForm = () => {
           className="auth-input"
           value={form.email}
           onChange={handleChange}
+          disabled={isLoading}
+          required
         />
         <input
           type="password"
           name="password"
-          placeholder="Password"
+          placeholder="Password (min 8 characters)"
           className="auth-input"
           value={form.password}
           onChange={handleChange}
+          disabled={isLoading}
+          required
+          minLength="8"
         />
-        <button type="submit" className="auth-button">Register</button>
+        <input
+          type="password"
+          name="confirmPassword"
+          placeholder="Confirm Password"
+          className="auth-input"
+          value={confirmPassword}
+          onChange={handleConfirmPasswordChange}
+          disabled={isLoading}
+          required
+          minLength="8"
+        />
+        <button 
+          type="submit" 
+          className="auth-button"
+          disabled={isLoading}
+        >
+          {isLoading ? "Registering..." : "Register"}
+        </button>
+        {displayError && <p className="auth-error">{displayError}</p>}
       </form>
-      {message && <p className="auth-message">{message}</p>}
+      <p className="auth-message">
+        Already have an account? <a href="/login" className="auth-link">Login here</a>
+      </p>
     </div>
   );
 };
