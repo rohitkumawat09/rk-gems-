@@ -125,14 +125,14 @@ export const verifyOtp = async (req, res, next) => {
     res.cookie("accessToken", accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "None",
       maxAge: 15 * 60 * 1000 // 15 minutes
     });
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "None",
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
@@ -250,7 +250,7 @@ export const refresh = async (req, res, next) => {
     res.cookie("accessToken", newAccessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "None",
       maxAge: 15 * 60 * 1000 // 15 minutes
     });
 
@@ -258,7 +258,7 @@ export const refresh = async (req, res, next) => {
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "None",
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
@@ -290,14 +290,14 @@ export const logout = async (req, res, next) => {
     res.clearCookie("refreshToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "None",
       path: "/"
     });
 
     res.clearCookie("accessToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "None",
       path: "/"
     });
 

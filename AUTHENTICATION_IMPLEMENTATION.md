@@ -99,7 +99,7 @@ const {
 res.cookie("accessToken", token, {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "strict",
+  sameSite: "None",
   maxAge: 15 * 60 * 1000  // 15 minutes
 });
 
@@ -107,7 +107,7 @@ res.cookie("accessToken", token, {
 res.cookie("refreshToken", token, {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
-  sameSite: "strict",
+  sameSite: "None",
   maxAge: 7 * 24 * 60 * 60 * 1000  // 7 days
 });
 ```
@@ -115,8 +115,8 @@ res.cookie("refreshToken", token, {
 ### Cookie Clearing on Logout
 ```javascript
 // Both cookies cleared on logout
-res.clearCookie("refreshToken", { httpOnly: true, secure: true, sameSite: "strict" });
-res.clearCookie("accessToken", { httpOnly: true, secure: true, sameSite: "strict" });
+res.clearCookie("refreshToken", { httpOnly: true, secure: true, sameSite: "None" });
+res.clearCookie("accessToken", { httpOnly: true, secure: true, sameSite: "None" });
 ```
 
 ### CORS Configuration
